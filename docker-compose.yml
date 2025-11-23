@@ -7,25 +7,32 @@ services:
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: appdb
+      MYSQL_DATABASE: dockerappdb
       MYSQL_USER: appuser
       MYSQL_PASSWORD: apppass
     ports:
-      - "3308:3306"
+      - "3308:3306"        # host 3308 -> container 3306
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
       - app-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   app:
-    # If you have a Dockerfile in the same folder:
+    # Dockerfile must be in the same folder as this compose file
     build: .
     container_name: spring-boot-app
     restart: always
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3308/appdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # IMPORTANT: use the **service name** (mysql) and internal port 3306
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/dockerappdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: appuser
       SPRING_DATASOURCE_PASSWORD: apppass
 
@@ -33,7 +40,22 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_JPA_SHOW_SQL: "true"
     ports:
-      - "8080:8080"
+      - "8082:8082"        # host 8082 -> container 8080
+    networks:
+      - app-network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: myapp-phpmyadmin
+    restart: always
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql       # MUST match the mysql service name
+      PMA_USER: root
+      PMA_PASSWORD: root
+    ports:
+      - "8081:80"           # host 8081 -> container 80 (phpMyAdmin UI)
     networks:
       - app-network
 
